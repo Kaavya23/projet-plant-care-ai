@@ -25,14 +25,15 @@ services:
   mlflow:
     image: ghcr.io/mlflow/mlflow:latest
     command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:////mlruns/mlflow.db
-    ports: ["5000:5000"]
+    ports: ["5001:5000"]
     volumes: ["mlruns:/mlruns"]
 
   api:
     build: .
     depends_on:
       postgres: {condition: service_healthy}
-    environment:
+    env_file: [.env]              # apporte GEMINI_API_KEY (et autres) dans le conteneur
+    environment:                  # ces valeurs priment sur .env (réseau interne Docker)
       DATABASE_URL: postgresql+psycopg2://plantcare:plantcare@postgres:5432/plantcare
       DATALAKE_BACKEND: minio
       MINIO_ENDPOINT: http://minio:9000

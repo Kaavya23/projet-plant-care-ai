@@ -72,6 +72,29 @@ class GabaritLocalGateway:
         return ConseilEntretien(texte=texte, source="gabarit_local")
 
 
+class GeminiApiKeyGateway:
+    """Appelle l'API Gemini via une clé AI Studio (google-generativeai).
+
+    Voie la plus simple : une seule clé (chaîne), sans compte de service.
+    """
+
+    def __init__(self, api_key: str, model: str = "gemini-1.5-flash"):
+        self.api_key = api_key
+        self.model_name = model
+        self._fallback = GabaritLocalGateway()
+
+    def conseiller(self, payload: PayloadConseil) -> ConseilEntretien:
+        try:
+            import google.generativeai as genai
+            genai.configure(api_key=self.api_key)
+            model = genai.GenerativeModel(self.model_name)
+            resp = model.generate_content(payload.as_prompt())
+            return ConseilEntretien(texte=resp.text.strip(), source="gemini_api")
+        except Exception:
+            # quota / réseau / clé invalide -> gabarit local (cf. M2/R3)
+            return self._fallback.conseiller(payload)
+
+
 class GeminiGateway:
     """Appelle Vertex AI Gemini. Nécessite GCP + google-cloud-aiplatform."""
 
@@ -94,10 +117,20 @@ class GeminiGateway:
 
 
 def obtenir_gateway() -> LLMGateway:
-    """Fabrique : Gemini si configuré, sinon gabarit local."""
+    """Fabrique : clé API AI Studio > Vertex AI > gabarit local.
+
+    On choisit la première voie effectivement configurée. Aucune configuration
+    -> gabarit local, garantissant une réponse même hors ligne (cf. M6).
+    """
+    api_key = os.getenv("GEMINI_API_KEY")
+    if api_key:
+        return GeminiApiKeyGateway(
+            api_key, model=os.getenv("GEMINI_MODEL", "gemini-1.5-flash"))
+
     project = os.getenv("GCP_PROJECT")
     creds = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
     if project and creds and os.path.exists(creds):
         return GeminiGateway(project=project,
                              location=os.getenv("GCP_LOCATION", "europe-west1"))
+
     return GabaritLocalGateway()
