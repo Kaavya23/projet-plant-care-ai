@@ -9,3 +9,4 @@ ml/artifacts/
 data/*.csv
 data/plantnet_subset/
 !data/.gitkeep
+.DS_Store
