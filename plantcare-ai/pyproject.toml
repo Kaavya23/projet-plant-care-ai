@@ -1,0 +1,16 @@
+[project]
+name = "plantcare-ai"
+version = "1.0.0"
+description = "POC PlantCare AI — 3 options d'IA sur socle datalake (Clean Architecture)"
+requires-python = ">=3.11"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

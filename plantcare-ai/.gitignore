@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+secrets/
+datalake/
+mlruns/
+ml/artifacts/
+data/*.csv
+data/plantnet_subset/
+!data/.gitkeep

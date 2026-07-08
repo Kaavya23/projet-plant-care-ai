@@ -1,0 +1,84 @@
+"""
+Dashboard Streamlit — point d'entrée visuel du POC (cf. F8).
+
+Trois onglets démontrent les trois options d'IA en appelant l'API FastAPI.
+Configurable via API_URL (défaut : http://localhost:8000).
+
+Lancement :  streamlit run dashboard/app.py
+"""
+from __future__ import annotations
+
+import os
+
+import requests
+import streamlit as st
+
+API = os.getenv("API_URL", "http://localhost:8000")
+
+st.set_page_config(page_title="PlantCare AI", page_icon="🌿", layout="wide")
+st.title("🌿 PlantCare AI — Assistant d'entretien des plantes")
+
+try:
+    h = requests.get(f"{API}/health", timeout=5).json()
+    st.caption(f"API OK · modèle arrosage : {h['watering_model']} · "
+               f"vision : {h['vision_model']} · LLM : {h['llm']}")
+except Exception:
+    st.error(f"API injoignable sur {API}. Lance d'abord l'API (uvicorn).")
+
+especes = {
+    "Monstera deliciosa": dict(id=1, lumiere=0.6, seuil_sol_sec=30),
+    "Sansevieria trifasciata": dict(id=3, lumiere=0.4, seuil_sol_sec=20),
+    "Calathea orbifolia": dict(id=6, lumiere=0.4, seuil_sol_sec=40),
+}
+
+tab_c, tab_a, tab_b = st.tabs(
+    ["💧 Arrosage (C)", "💬 Conseil (A)", "📷 Reconnaissance (B)"])
+
+with tab_c:
+    st.subheader("Recommandation d'arrosage — RandomForest maison")
+    col = st.columns(2)
+    nom = col[0].selectbox("Espèce", list(especes), key="c_esp")
+    pot = col[0].slider("Taille du pot (cm)", 8, 30, 18)
+    sol = col[1].slider("Humidité du sol (%)", 2, 95, 25)
+    temp = col[1].slider("Température (°C)", 8, 38, 24)
+    lux = col[0].slider("Luminosité (lux)", 50, 2000, 700)
+    hum = col[1].slider("Humidité de l'air (%)", 15, 95, 50)
+    jours = col[0].slider("Jours depuis dernier arrosage", 0, 12, 3)
+    if st.button("Prédire l'arrosage", type="primary"):
+        e = especes[nom]
+        r = requests.post(f"{API}/api/v1/arrosage", json=dict(
+            taille_pot=pot, espece=dict(id=e["id"], nom_sci=nom,
+                lumiere=e["lumiere"], seuil_sol_sec=e["seuil_sol_sec"]),
+            mesure=dict(sol=sol, temperature=temp, lux=lux, humidite_air=hum),
+            jours_dernier_arrosage=jours)).json()
+        emoji = {"arroser_maintenant": "🚿", "verifier_prochainement": "👀",
+                 "ne_pas_arroser": "✋"}.get(r["verdict"], "")
+        st.metric(f"{emoji} Verdict", r["verdict"], f"confiance {r['confiance']:.0%}")
+        st.info(r["explication"])
+
+with tab_a:
+    st.subheader("Conseil d'entretien — Gemini + secours local")
+    nom2 = st.selectbox("Espèce", list(especes), key="a_esp")
+    tj = st.slider("Température du jour (°C)", 8, 38, 32)
+    hj = st.slider("Humidité de l'air du jour (%)", 15, 95, 40)
+    if st.button("Générer le conseil", type="primary"):
+        e = especes[nom2]
+        r = requests.post(f"{API}/api/v1/conseil", json=dict(
+            espece=dict(id=e["id"], nom_sci=nom2, lumiere=e["lumiere"],
+                        seuil_sol_sec=e["seuil_sol_sec"]),
+            mesure=dict(sol=20, temperature=tj, lux=700, humidite_air=hj),
+            temperature_jour=tj, humidite_air_jour=hj)).json()
+        st.success(r["conseil"])
+        st.caption(f"source : {r['source']}")
+
+with tab_b:
+    st.subheader("Reconnaissance d'espèce — MobileNetV2 fine-tuné")
+    photo = st.file_uploader("Photo de la plante", type=["jpg", "jpeg", "png"])
+    if photo and st.button("Identifier", type="primary"):
+        r = requests.post(f"{API}/api/v1/reconnaissance",
+                          files={"fichier": (photo.name, photo.getvalue(),
+                                             photo.type)}).json()
+        st.image(photo, width=280)
+        st.metric("Espèce prédite", r["espece_predite"], f"score {r['score']:.0%}")
+        for alt in r.get("alternatives", []):
+            st.caption(f"alternative : {alt['espece']} ({alt['score']:.0%})")
