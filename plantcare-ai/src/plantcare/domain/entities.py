@@ -65,3 +65,20 @@ class AnalyseImage:
     espece_predite: str
     score: float
     alternatives: list[tuple[str, float]]
+
+
+@dataclass(frozen=True)
+class SuggestionMaladie:
+    """Une cause possible identifiée par l'Option D."""
+    nom: str
+    probabilite: float
+    description: str
+    traitement: str | None
+
+
+@dataclass(frozen=True)
+class AnalyseSante:
+    """Sortie de l'Option D — santé de la plante via plant.health."""
+    est_saine: bool | None
+    probabilite_sante: float | None
+    suggestions: list[SuggestionMaladie]

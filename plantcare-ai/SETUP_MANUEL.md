@@ -28,7 +28,7 @@ Pour activer Gemini :
 
 1. Créez un projet sur <https://console.cloud.google.com>.
 2. Activez l'API **Vertex AI** (`Vertex AI API`).
-3. Créez un **compte de service** → rôle *Vertex AI User* → **générez une clé JSON**.
+3. Créez un **compte de service** → rôle _Vertex AI User_ → **générez une clé JSON**.
 4. Déposez la clé dans `./secrets/gcp-key.json` (dossier déjà dans `.gitignore` — **ne jamais committer**).
 5. Renseignez dans `.env` :
    ```
@@ -43,6 +43,28 @@ En cas de quota/indispo, le repli local se fait tout seul (cf. M2/R3).
 
 > 💡 Astuce démo : gardez un **cache** ou laissez le gabarit local activé le jour
 > de la soutenance pour ne pas dépendre du réseau (R3).
+
+---
+
+## 1 bis. 🟢 Option A — Contexte météo OpenWeatherMap
+
+Permet d'enrichir les conseils LLM avec la météo locale (température,
+humidité, vent, pluie) à partir d'une latitude/longitude.
+
+1. Créez une clé sur <https://openweathermap.org/api>.
+2. Ajoutez dans `.env` :
+   ```
+   OPENWEATHER_API_KEY=votre_cle_ici
+   OPENWEATHER_DEFAULT_LAT=48.8566
+   OPENWEATHER_DEFAULT_LON=2.3522
+   OPENWEATHER_DEFAULT_UNITS=metric
+   OPENWEATHER_DEFAULT_LANG=fr
+   ```
+3. Dans le dashboard (onglet **Conseil**), activez l'option météo et renseignez
+   votre position si besoin.
+
+Les champs `temperature_jour` / `humidite_air_jour` restent modifiables :
+s'ils sont fournis, ils ont priorité sur les valeurs OpenWeatherMap.
 
 ---
 
@@ -64,7 +86,7 @@ Pour des résultats crédibles :
 3. Lancez : `python ml/train_vision.py --epochs 3`
 4. Vérifiez que `acc_finetune > acc_baseline` (critère M1).
 
-*(Le nom du dossier = le libellé d'espèce renvoyé par l'API.)*
+_(Le nom du dossier = le libellé d'espèce renvoyé par l'API.)_
 
 ---
 
@@ -121,11 +143,11 @@ les **crédits gratuits**. Le POC reste entièrement démontrable en local (R4).
 
 ## Récapitulatif « à fournir »
 
-| Élément | Où | Requis ? |
-|---|---|---|
-| Clé JSON compte de service GCP | `./secrets/gcp-key.json` + `.env` | 🟢 (sinon gabarit local) |
-| Sous-ensemble PlantNet | `data/plantnet_subset/<Espece>/` | 🔴 pour Option B crédible |
-| PostgreSQL | Docker ou local + `DATABASE_URL` | 🔴 pour la persistance |
-| MinIO / GCS | Docker ou cloud + `.env` | 🟢 (local par défaut) |
-| MLflow | Docker ou local | 🟢 |
-| Open-Meteo | rien (sans clé) | — |
+| Élément                        | Où                                | Requis ?                  |
+| ------------------------------ | --------------------------------- | ------------------------- |
+| Clé JSON compte de service GCP | `./secrets/gcp-key.json` + `.env` | 🟢 (sinon gabarit local)  |
+| Sous-ensemble PlantNet         | `data/plantnet_subset/<Espece>/`  | 🔴 pour Option B crédible |
+| PostgreSQL                     | Docker ou local + `DATABASE_URL`  | 🔴 pour la persistance    |
+| MinIO / GCS                    | Docker ou cloud + `.env`          | 🟢 (local par défaut)     |
+| MLflow                         | Docker ou local                   | 🟢                        |
+| Open-Meteo                     | rien (sans clé)                   | —                         |

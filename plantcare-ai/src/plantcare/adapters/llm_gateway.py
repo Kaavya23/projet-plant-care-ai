@@ -32,15 +32,22 @@ class PayloadConseil:
     temperature_jour: float
     humidite_air_jour: float
     verdict_arrosage: str
+    meteo_resume: str | None = None
+    meteo_source: str | None = None
 
     def as_prompt(self) -> str:
+        meteo = ""
+        if self.meteo_resume:
+            src = f" ({self.meteo_source})" if self.meteo_source else ""
+            meteo = f" Meteo locale{src} : {self.meteo_resume}."
         return (
-            "Tu es un assistant jardinage. Rédige en français un conseil court "
-            "(2-3 phrases), concret et bienveillant, pour l'entretien d'une "
+            "Tu es un expert en jardinage. Rédige en français un conseil "
+            "concret et bienveillant, pour l'entretien d'une "
             f"plante de type {self.espece}. Contexte du jour : température "
             f"{self.temperature_jour:.0f} °C, humidité de l'air "
             f"{self.humidite_air_jour:.0f} %, besoin en lumière : {self.lumiere}. "
             f"Le modèle d'arrosage recommande : « {self.verdict_arrosage} ». "
+            f"{meteo}"
             "Ne mentionne aucune donnée personnelle."
         )
 
@@ -78,7 +85,7 @@ class GeminiApiKeyGateway:
     Voie la plus simple : une seule clé (chaîne), sans compte de service.
     """
 
-    def __init__(self, api_key: str, model: str = "gemini-1.5-flash"):
+    def __init__(self, api_key: str, model: str = "gemini-2.5-flash"):
         self.api_key = api_key
         self.model_name = model
         self._fallback = GabaritLocalGateway()
@@ -125,7 +132,7 @@ def obtenir_gateway() -> LLMGateway:
     api_key = os.getenv("GEMINI_API_KEY")
     if api_key:
         return GeminiApiKeyGateway(
-            api_key, model=os.getenv("GEMINI_MODEL", "gemini-1.5-flash"))
+            api_key, model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"))
 
     project = os.getenv("GCP_PROJECT")
     creds = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
