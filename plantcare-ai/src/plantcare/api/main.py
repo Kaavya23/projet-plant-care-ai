@@ -161,6 +161,43 @@ def health():
     }
 
 
+@app.get("/api/v1/stats", tags=["Datalake"])
+def statistiques():
+    """Statistiques agrégées lues depuis la couche CURATED du datalake."""
+    def _charger(nom: str) -> list[dict]:
+        try:
+            return datalake.lire_csv("curated", nom).to_dict(orient="records")
+        except Exception:
+            return []
+
+    return {
+        "especes": _charger("predictions_stats.csv"),
+        "capteurs": _charger("capteurs_stats.csv"),
+        "meteo": _charger("meteo_horaire.csv"),
+    }
+
+
+@app.post("/api/v1/stats/refresh", tags=["Datalake"])
+def rafraichir_statistiques():
+    """Recalcule la couche CURATED à partir des données RAW du datalake."""
+    resultats: dict[str, int] = {}
+
+    # Espèces reconnues : agrégat des prédictions brutes
+    try:
+        preds = datalake.lire_csv_glob("raw", "predictions/**/*.csv")
+        if not preds.empty:
+            kpi = (preds.groupby("espece_predite", as_index=False)
+                        .agg(n=("espece_predite", "size"), score_moy=("score", "mean"))
+                        .sort_values("n", ascending=False))
+            kpi["score_moy"] = kpi["score_moy"].round(3)
+            datalake.ecrire_csv(kpi, "curated", "predictions_stats.csv")
+            resultats["especes"] = int(len(kpi))
+    except Exception as e:
+        resultats["especes_erreur"] = str(e)  # type: ignore[assignment]
+
+    return {"status": "ok", "recalcule": resultats}
+
+
 @app.post("/api/v1/arrosage", tags=["Option C"])
 def recommander_arrosage(req: ArrosageRequest):
     """Option C - verdict d'arrosage (RandomForest maison)."""
@@ -172,10 +209,10 @@ def recommander_arrosage(req: ArrosageRequest):
         "explication": reco.explication,
     }
     ts = datetime.now(timezone.utc).isoformat()
-    datalake.ecrire_parquet(
+    datalake.ecrire_csv(
         pd.DataFrame([{"ts": ts, "plante_id": req.plante_id,
                        "espece": req.espece.nom_sci, **result}]),
-        "raw", f"arrosage/{ts[:10]}/{uuid.uuid4().hex}.parquet")
+        "raw", f"arrosage/{ts[:10]}/{uuid.uuid4().hex}.csv")
     return result
 
 
@@ -232,11 +269,11 @@ def conseiller_entretien(req: ConseilRequest):
     )
 
     ts = datetime.now(timezone.utc).isoformat()
-    datalake.ecrire_parquet(
+    datalake.ecrire_csv(
         pd.DataFrame([{"ts": ts, "plante_id": req.plante_id,
                        "espece": req.espece.nom_sci,
                        "conseil": conseil.texte, "source": conseil.source}]),
-        "raw", f"conseils/{ts[:10]}/{uuid.uuid4().hex}.parquet")
+        "raw", f"conseils/{ts[:10]}/{uuid.uuid4().hex}.csv")
 
     return {
         "conseil": conseil.texte,
@@ -297,11 +334,11 @@ async def reconnaitre_espece(fichier: UploadFile = File(...)):
             {"espece": e, "score": round(s, 3)} for e, s in res.alternatives
         ],
     }
-    datalake.ecrire_parquet(
+    datalake.ecrire_csv(
         pd.DataFrame([{"ts": ts, "image_id": uid,
                        "espece_predite": res.espece_predite,
                        "score": res.score}]),
-        "raw", f"predictions/{ts[:10]}/{uid}.parquet")
+        "raw", f"predictions/{ts[:10]}/{uid}.csv")
     return result
 
 
