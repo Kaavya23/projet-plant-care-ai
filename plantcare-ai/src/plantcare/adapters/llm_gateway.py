@@ -32,8 +32,14 @@ class PayloadConseil:
     temperature_jour: float
     humidite_air_jour: float
     verdict_arrosage: str
+    meteo_resume: str | None = None
+    meteo_source: str | None = None
 
     def as_prompt(self) -> str:
+        meteo = ""
+        if self.meteo_resume:
+            src = f" ({self.meteo_source})" if self.meteo_source else ""
+            meteo = f" Meteo locale{src} : {self.meteo_resume}."
         return (
             "Tu es un expert en jardinage. Rédige en français un conseil "
             "concret et bienveillant, pour l'entretien d'une "
@@ -41,6 +47,7 @@ class PayloadConseil:
             f"{self.temperature_jour:.0f} °C, humidité de l'air "
             f"{self.humidite_air_jour:.0f} %, besoin en lumière : {self.lumiere}. "
             f"Le modèle d'arrosage recommande : « {self.verdict_arrosage} ». "
+            f"{meteo}"
             "Ne mentionne aucune donnée personnelle."
         )
 
