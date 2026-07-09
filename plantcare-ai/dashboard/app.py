@@ -73,8 +73,9 @@ VERDICT_LABELS = {
     "ne_pas_arroser": "Ne pas arroser",
 }
 
-tab_c, tab_a, tab_b, tab_d = st.tabs(
-    ["💧 Arrosage (C)", "💬 Conseil (A)", "📷 Reconnaissance (B)", "🔬 Santé (D)"])
+tab_c, tab_a, tab_b, tab_d, tab_stats = st.tabs(
+    ["💧 Arrosage (C)", "💬 Conseil (A)", "📷 Reconnaissance (B)", "🔬 Santé (D)",
+     "📊 Statistiques"])
 
 with tab_c:
     st.subheader("Recommandation d'arrosage — RandomForest maison")
@@ -343,3 +344,61 @@ with tab_d:
                 st.code(err.response.text)
             except requests.RequestException as err:
                 st.error(f"Impossible de contacter l'API : {err}")
+
+with tab_stats:
+    st.subheader("Statistiques agrégées — couche Curated du datalake")
+    st.caption(
+        "Ces chiffres proviennent des fichiers `curated/` du datalake, "
+        "produits par le pipeline Prefect (raw → staging → curated)."
+    )
+
+    if st.button("🔄 Recalculer les statistiques", type="primary", key="stats_refresh"):
+        try:
+            r = requests.post(f"{API}/api/v1/stats/refresh", timeout=30)
+            r.raise_for_status()
+            st.success("Statistiques recalculées depuis le datalake.")
+        except requests.RequestException as err:
+            st.error(f"Échec du recalcul : {err}")
+
+    stats = None
+    try:
+        resp = requests.get(f"{API}/api/v1/stats", timeout=15)
+        resp.raise_for_status()
+        stats = resp.json()
+    except requests.RequestException as err:
+        st.error(f"Impossible de récupérer les statistiques : {err}")
+
+    if stats is not None:
+        import pandas as pd
+
+        especes = pd.DataFrame(stats.get("especes", []))
+        capteurs = pd.DataFrame(stats.get("capteurs", []))
+        meteo = pd.DataFrame(stats.get("meteo", []))
+
+        st.markdown("### 📷 Espèces les plus reconnues")
+        if not especes.empty:
+            especes = especes.rename(columns={
+                "espece_predite": "Espèce",
+                "n": "Nombre de reconnaissances",
+                "score_moy": "Score moyen",
+            })
+            c1, c2 = st.columns([2, 1])
+            c1.bar_chart(especes.set_index("Espèce")["Nombre de reconnaissances"])
+            c2.dataframe(especes, hide_index=True, use_container_width=True)
+        else:
+            st.info("Aucune reconnaissance enregistrée pour l'instant.")
+
+        st.markdown("### 🌦️ Météo moyenne par ville")
+        if not meteo.empty:
+            meteo = meteo.rename(columns={
+                "ville": "Ville",
+                "heure": "Heure",
+                "temp_moy": "Température moyenne (°C)",
+                "humidite_moy": "Humidité moyenne (%)",
+                "vent_moy": "Vent moyen (km/h)",
+                "pluie_tot": "Pluie cumulée (mm)",
+            })
+            st.dataframe(meteo, hide_index=True, use_container_width=True)
+        else:
+            st.info("Aucune donnée météo agrégée. Lance le flow Prefect.")
+
