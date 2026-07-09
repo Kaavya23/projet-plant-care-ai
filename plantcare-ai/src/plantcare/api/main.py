@@ -7,6 +7,8 @@ et serialiser leur resultat. Aucune logique metier dans cette couche.
 """
 from __future__ import annotations
 
+from typing import Literal
+
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel

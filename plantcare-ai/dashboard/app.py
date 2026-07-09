@@ -18,6 +18,26 @@ load_dotenv()
 
 API = os.getenv("API_URL", "http://localhost:8000")
 
+
+def _post_json(url: str, **kwargs):
+    """Appelle l'API et retourne du JSON, sinon affiche une erreur lisible."""
+    try:
+        resp = requests.post(url, timeout=30, **kwargs)
+        resp.raise_for_status()
+    except requests.RequestException as err:
+        st.error(f"Erreur API: {err}")
+        if getattr(err, "response", None) is not None and err.response.text:
+            st.code(err.response.text[:2000])
+        return None
+
+    try:
+        return resp.json()
+    except ValueError:
+        st.error("La reponse de l'API n'est pas un JSON valide.")
+        if resp.text:
+            st.code(resp.text[:2000])
+        return None
+
 st.set_page_config(page_title="PlantCare AI", page_icon="🌿", layout="wide")
 st.title("🌿 PlantCare AI — Assistant d'entretien des plantes")
 
@@ -39,10 +59,7 @@ tab_c, tab_a, tab_b, tab_d = st.tabs(
 
 with tab_c:
     st.subheader("Recommandation d'arrosage — RandomForest maison")
-    st.info(
-        "Priorité des données: 1) valeurs manuelles si renseignées, "
-        "2) météo OpenWeatherMap, 3) capteurs locaux en repli."
-    )
+
     col = st.columns(2)
     nom = col[0].selectbox("Espèce", list(especes), key="c_esp")
     pot = col[0].slider("Taille du pot (cm)", 8, 30, 18)
@@ -53,11 +70,13 @@ with tab_c:
     jours = col[0].slider("Jours depuis dernier arrosage", 0, 12, 3)
     if st.button("Prédire l'arrosage", type="primary"):
         e = especes[nom]
-        r = requests.post(f"{API}/api/v1/arrosage", json=dict(
+        r = _post_json(f"{API}/api/v1/arrosage", json=dict(
             taille_pot=pot, espece=dict(id=e["id"], nom_sci=nom,
                 lumiere=e["lumiere"], seuil_sol_sec=e["seuil_sol_sec"]),
             mesure=dict(sol=sol, temperature=temp, lux=lux, humidite_air=hum),
-            jours_dernier_arrosage=jours)).json()
+            jours_dernier_arrosage=jours))
+        if r is None:
+            st.stop()
         emoji = {"arroser_maintenant": "🚿", "verifier_prochainement": "👀",
                  "ne_pas_arroser": "✋"}.get(r["verdict"], "")
         st.metric(f"{emoji} Verdict", r["verdict"], f"confiance {r['confiance']:.0%}")
@@ -68,15 +87,15 @@ with tab_a:
     nom2 = st.selectbox("Espèce", list(especes), key="a_esp")
 
     source_metriques = st.radio(
-        "Choix de la temperature et de l'humidite du jour",
+        "Choix de la température et de l'humidité du jour",
         [
-            "Saisie manuelle (sliders)",
-            "Meteo OpenWeatherMap",
+            "Saisie manuelle",
+            "Météo de votre ville",
         ],
         horizontal=True,
     )
 
-    utilisation_sliders = source_metriques == "Saisie manuelle (sliders)"
+    utilisation_sliders = source_metriques == "Saisie manuelle"
     tj = st.slider(
         "Température du jour (ajustable, °C)",
         8,
@@ -93,11 +112,11 @@ with tab_a:
     )
 
     if utilisation_sliders:
-        st.caption("Les sliders seront utilises pour temperature/humidite du conseil.")
+        st.caption("Les sliders seront utilisés pour température/humidité du conseil.")
     else:
         st.caption(
-            "La meteo API sera prioritaire pour temperature/humidite. "
-            "Les sliders sont ignores."
+            "La météo API sera prioritaire pour température/humidité. "
+            "Les sliders sont ignorés."
         )
 
     villes = [
@@ -128,7 +147,9 @@ with tab_a:
             payload["humidite_air_jour"] = hj
         payload["meteo"] = meteo_payload
 
-        r = requests.post(f"{API}/api/v1/conseil", json=payload).json()
+        r = _post_json(f"{API}/api/v1/conseil", json=payload)
+        if r is None:
+            st.stop()
         st.markdown("## Resultat du conseil")
         st.success(r["conseil"])
         st.caption(f"Source LLM: {r['source']}")
@@ -149,9 +170,11 @@ with tab_b:
     st.subheader("Reconnaissance d'espèce — MobileNetV2 fine-tuné")
     photo = st.file_uploader("Photo de la plante", type=["jpg", "jpeg", "png"])
     if photo and st.button("Identifier", type="primary"):
-        r = requests.post(f"{API}/api/v1/reconnaissance",
-                          files={"fichier": (photo.name, photo.getvalue(),
-                                             photo.type)}).json()
+        r = _post_json(f"{API}/api/v1/reconnaissance",
+                       files={"fichier": (photo.name, photo.getvalue(),
+                                          photo.type)})
+        if r is None:
+            st.stop()
         st.image(photo, width=280)
         st.metric("Espèce prédite", r["espece_predite"], f"score {r['score']:.0%}")
         for alt in r.get("alternatives", []):
