@@ -33,16 +33,27 @@ def ecrire_bytes(data: bytes, zone: str, relatif: str) -> str:
     return path
 
 
-def ecrire_parquet(df, zone: str, relatif: str) -> str:
+def ecrire_csv(df, zone: str, relatif: str) -> str:
     path = chemin(zone, relatif)
-    of = fsspec.open(path, "wb", **_storage_options())
+    of = fsspec.open(path, "w", encoding="utf-8", **_storage_options())
     with of as f:
-        df.to_parquet(f, index=False)
+        df.to_csv(f, index=False)
     return path
 
 
-def lire_parquet(zone: str, relatif: str):
+def lire_csv(zone: str, relatif: str):
     import pandas as pd
     path = chemin(zone, relatif)
-    with fsspec.open(path, "rb", **_storage_options()) as f:
-        return pd.read_parquet(f)
+    with fsspec.open(path, "r", encoding="utf-8", **_storage_options()) as f:
+        return pd.read_csv(f)
+
+
+def lire_csv_glob(zone: str, motif: str = "**/*.csv"):
+    """Lit et concatène tous les CSV correspondant au motif dans une zone."""
+    import pandas as pd
+    pattern = chemin(zone, motif)
+    dfs = []
+    for of in fsspec.open_files(pattern, "r", encoding="utf-8", **_storage_options()):
+        with of as f:
+            dfs.append(pd.read_csv(f))
+    return pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
