@@ -26,6 +26,13 @@ def chemin(zone: str, relatif: str) -> str:
     return f"{root}/{zone}/{relatif}"
 
 
+def ecrire_bytes(data: bytes, zone: str, relatif: str) -> str:
+    path = chemin(zone, relatif)
+    with fsspec.open(path, "wb", **_storage_options()) as f:
+        f.write(data)
+    return path
+
+
 def ecrire_parquet(df, zone: str, relatif: str) -> str:
     path = chemin(zone, relatif)
     of = fsspec.open(path, "wb", **_storage_options())
