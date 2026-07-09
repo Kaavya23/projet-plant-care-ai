@@ -36,6 +36,7 @@ services:
     environment:                  # ces valeurs priment sur .env (réseau interne Docker)
       DATABASE_URL: postgresql+psycopg2://plantcare:plantcare@postgres:5432/plantcare
       DATALAKE_BACKEND: minio
+      DATALAKE_ROOT: s3://plantcare
       MINIO_ENDPOINT: http://minio:9000
     ports: ["8000:8000"]
     volumes: ["./ml/artifacts:/app/ml/artifacts"]

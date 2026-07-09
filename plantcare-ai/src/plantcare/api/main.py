@@ -7,8 +7,11 @@ et serialiser leur resultat. Aucune logique metier dans cette couche.
 """
 from __future__ import annotations
 
+import uuid
+from datetime import datetime, timezone
 from typing import Literal
 
+import pandas as pd
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -20,6 +23,7 @@ from plantcare.adapters.watering_model import WateringModel
 from plantcare.adapters.weather_gateway import MeteoSnapshot, obtenir_weather_gateway
 from plantcare.config import settings
 from plantcare.domain.entities import Espece, MesureCapteur, Plante
+from plantcare.infrastructure import datalake
 from plantcare.usecases.services import (
     AnalyserSantePlante,
     ConseillerEntretien,
@@ -162,11 +166,17 @@ def recommander_arrosage(req: ArrosageRequest):
     """Option C - verdict d'arrosage (RandomForest maison)."""
     plante, espece, mesure = _to_domain(req)
     reco = uc_arrosage.executer(plante, espece, mesure, req.jours_dernier_arrosage)
-    return {
+    result = {
         "verdict": reco.verdict.value,
         "confiance": round(reco.confiance, 3),
         "explication": reco.explication,
     }
+    ts = datetime.now(timezone.utc).isoformat()
+    datalake.ecrire_parquet(
+        pd.DataFrame([{"ts": ts, "plante_id": req.plante_id,
+                       "espece": req.espece.nom_sci, **result}]),
+        "raw", f"arrosage/{ts[:10]}/{uuid.uuid4().hex}.parquet")
+    return result
 
 
 @app.post("/api/v1/conseil", tags=["Option A"])
@@ -221,6 +231,13 @@ def conseiller_entretien(req: ConseilRequest):
         meteo_source=meteo.source if meteo else None,
     )
 
+    ts = datetime.now(timezone.utc).isoformat()
+    datalake.ecrire_parquet(
+        pd.DataFrame([{"ts": ts, "plante_id": req.plante_id,
+                       "espece": req.espece.nom_sci,
+                       "conseil": conseil.texte, "source": conseil.source}]),
+        "raw", f"conseils/{ts[:10]}/{uuid.uuid4().hex}.parquet")
+
     return {
         "conseil": conseil.texte,
         "source": conseil.source,
@@ -269,13 +286,23 @@ async def reconnaitre_espece(fichier: UploadFile = File(...)):
         raise HTTPException(400, "Un fichier image est attendu.")
     data = await fichier.read()
     res = uc_espece.executer(data)
-    return {
+    ts = datetime.now(timezone.utc).isoformat()
+    uid = uuid.uuid4().hex
+    ext = (fichier.filename or "image.jpg").rsplit(".", 1)[-1]
+    datalake.ecrire_bytes(data, "raw", f"images/{ts[:10]}/{uid}.{ext}")
+    result = {
         "espece_predite": res.espece_predite,
         "score": round(res.score, 3),
         "alternatives": [
             {"espece": e, "score": round(s, 3)} for e, s in res.alternatives
         ],
     }
+    datalake.ecrire_parquet(
+        pd.DataFrame([{"ts": ts, "image_id": uid,
+                       "espece_predite": res.espece_predite,
+                       "score": res.score}]),
+        "raw", f"predictions/{ts[:10]}/{uid}.parquet")
+    return result
 
 
 @app.post("/api/v1/sante", tags=["Option D"])
