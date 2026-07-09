@@ -54,7 +54,11 @@ Pour des résultats crédibles :
 
 1. Récupérez **5 à 10 espèces** depuis PlantNet-300K
    (miroir Hugging Face conseillé, en streaming — **ne téléchargez jamais les 32 Go**, cf. M2/R2).
-2. Rangez ~30–100 images par espèce ainsi :
+2. Préparez un sous-ensemble dans le bon format avec :
+   ```bash
+   python ml/prepare_plantnet_subset.py --species Monstera deliciosa Ficus lyrata Sansevieria trifasciata --max-per-species 30
+   ```
+   Cela crée une arborescence compatible avec votre entraînement :
    ```
    data/plantnet_subset/
      Monstera_deliciosa/  img1.jpg img2.jpg ...
