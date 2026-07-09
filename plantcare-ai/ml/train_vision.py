@@ -74,19 +74,34 @@ def main(epochs: int = 3, lr: float = 1e-3):
         net.classifier[1] = nn.Linear(net.classifier[1].in_features, len(classes))
         return net
 
-    def accuracy(net):
+    def evaluate_metrics(net):
+        from sklearn.metrics import f1_score, precision_score, recall_score
         net.eval()
-        ok = tot = 0
+        preds = []
+        trues = []
         with torch.no_grad():
             for x, y in val_dl:
                 p = net(x).argmax(1)
-                ok += (p == y).sum().item()
-                tot += y.numel()
-        return ok / max(tot, 1)
+                preds.append(p.cpu().numpy())
+                trues.append(y.cpu().numpy())
+        import numpy as _np
+        if preds:
+            preds = _np.concatenate(preds)
+            trues = _np.concatenate(trues)
+        else:
+            preds = _np.array([])
+            trues = _np.array([])
+        acc = float((preds == trues).mean()) if trues.size else 0.0
+        f1 = float(f1_score(trues, preds, average="macro")) if trues.size else 0.0
+        prec = float(precision_score(trues, preds, average="macro")) if trues.size else 0.0
+        rec = float(recall_score(trues, preds, average="macro")) if trues.size else 0.0
+        return dict(accuracy=acc, f1_macro=f1, precision_macro=prec, recall_macro=rec)
 
     # --- BASELINE : tête non entraînée (pré-entraîné brut) ----------------
     baseline_net = build()
-    acc_baseline = accuracy(baseline_net)
+    baseline_metrics = evaluate_metrics(baseline_net)
+    acc_baseline = baseline_metrics["accuracy"]
+    f1_baseline = baseline_metrics["f1_macro"]
 
     # --- FINE-TUNING : on entraîne toute la tête + dernières couches ------
     net = build()
@@ -103,11 +118,13 @@ def main(epochs: int = 3, lr: float = 1e-3):
             opt.step()
         print(f"  epoch {ep+1}/{epochs}  val_acc={accuracy(net):.3f}")
 
-    acc_ft = accuracy(net)
-    print(f"\n=== Vision (Option B) ===\n  baseline (pré-entraîné brut) : {acc_baseline:.3f}"
-          f"\n  après fine-tuning            : {acc_ft:.3f}"
-          f"\n  amélioration                 : {'OUI' if acc_ft > acc_baseline else 'NON'} "
-          f"({acc_ft - acc_baseline:+.3f})")
+        finetune_metrics = evaluate_metrics(net)
+        acc_ft = finetune_metrics["accuracy"]
+        f1_ft = finetune_metrics["f1_macro"]
+        print(f"\n=== Vision (Option B) ===\n  baseline (pré-entraîné brut) : {acc_baseline:.3f} (F1={f1_baseline:.3f})"
+            f"\n  après fine-tuning            : {acc_ft:.3f} (F1={f1_ft:.3f})"
+            f"\n  amélioration                 : {'OUI' if acc_ft > acc_baseline else 'NON'} "
+            f"({acc_ft - acc_baseline:+.3f})")
 
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     torch.save(net.state_dict(), ARTIFACTS / "vision_mobilenet.pt")
@@ -116,7 +133,14 @@ def main(epochs: int = 3, lr: float = 1e-3):
         import mlflow
         mlflow.set_experiment("plantcare-vision")
         with mlflow.start_run(run_name="mobilenet_ft"):
-            mlflow.log_metrics({"acc_baseline": acc_baseline, "acc_finetune": acc_ft})
+            mlflow.log_metrics({
+                "acc_baseline": acc_baseline,
+                "acc_finetune": acc_ft,
+                "f1_baseline": f1_baseline,
+                "f1_finetune": f1_ft,
+                "precision_finetune": finetune_metrics.get("precision_macro"),
+                "recall_finetune": finetune_metrics.get("recall_macro"),
+            })
     except Exception:
         pass
     print("Modèle vision sauvegardé dans", ARTIFACTS.resolve())

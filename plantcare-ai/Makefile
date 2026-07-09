@@ -1,6 +1,7 @@
-.PHONY: install data train-c train-b api dash pipeline seed test up
+.PHONY: install data train-c train-b prepare-plantnet api dash pipeline seed test up
 install:   ; pip install -r requirements.txt
 data:      ; python ml/generate_synthetic_data.py
+prepare-plantnet: ; python ml/prepare_plantnet_subset.py --species Monstera deliciosa Ficus lyrata Sansevieria trifasciata --max-per-species 30
 train-c:   ; python ml/train_watering.py
 train-b:   ; python ml/train_vision.py --epochs 3
 seed:      ; python ml/seed_db.py
