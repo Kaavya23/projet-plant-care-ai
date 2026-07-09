@@ -7,12 +7,7 @@ et serialiser leur resultat. Aucune logique metier dans cette couche.
 """
 from __future__ import annotations
 
-# Charge le fichier .env avant tout import local qui lit os.getenv()
 from dotenv import load_dotenv
-load_dotenv()
-
-from typing import Literal
-
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
@@ -30,11 +25,10 @@ from plantcare.usecases.services import (
     ReconnaitreEspece,
 )
 
-app = FastAPI(
-    title="PlantCare AI",
-    version="1.0.0",
-    description="POC - quatre options d'IA (A/B/C/D) sur socle datalake.",
-)
+load_dotenv()  # charge .env pour un lancement local (hors Docker)
+
+app = FastAPI(title="PlantCare AI", version="1.0.0",
+              description="POC — trois options d'IA (A/B/C) sur socle datalake.")
 
 # --- composition root : adaptateurs concrets -> cas d'usage ----------------
 _watering = WateringModel()
