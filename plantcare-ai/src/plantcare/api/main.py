@@ -7,6 +7,7 @@ et sérialiser leur résultat. Aucune logique métier dans cette couche.
 """
 from __future__ import annotations
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
@@ -16,6 +17,8 @@ from plantcare.adapters.watering_model import WateringModel
 from plantcare.domain.entities import Espece, MesureCapteur, Plante
 from plantcare.usecases.services import (ConseillerEntretien,
                                          ReconnaitreEspece, RecommanderArrosage)
+
+load_dotenv()  # charge .env pour un lancement local (hors Docker)
 
 app = FastAPI(title="PlantCare AI", version="1.0.0",
               description="POC — trois options d'IA (A/B/C) sur socle datalake.")
