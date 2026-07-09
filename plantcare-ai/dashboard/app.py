@@ -19,10 +19,10 @@ load_dotenv()
 API = os.getenv("API_URL", "http://localhost:8000")
 
 
-def _post_json(url: str, **kwargs):
+def _request_json(method: str, url: str, **kwargs):
     """Appelle l'API et retourne du JSON, sinon affiche une erreur lisible."""
     try:
-        resp = requests.post(url, timeout=30, **kwargs)
+        resp = requests.request(method, url, timeout=30, **kwargs)
         resp.raise_for_status()
     except requests.RequestException as err:
         st.error(f"Erreur API: {err}")
@@ -37,6 +37,14 @@ def _post_json(url: str, **kwargs):
         if resp.text:
             st.code(resp.text[:2000])
         return None
+
+
+def _post_json(url: str, **kwargs):
+    return _request_json("POST", url, **kwargs)
+
+
+def _get_json(url: str, **kwargs):
+    return _request_json("GET", url, **kwargs)
 
 st.set_page_config(page_title="PlantCare AI", page_icon="🌿", layout="wide")
 st.title("🌿 PlantCare AI — Assistant d'entretien des plantes")
@@ -54,6 +62,17 @@ especes = {
     "Calathea orbifolia": dict(id=6, lumiere=0.4, seuil_sol_sec=40),
 }
 
+VILLES = [
+    "Paris", "Lyon", "Marseille", "Toulouse", "Lille",
+    "Bordeaux", "Nantes", "Strasbourg", "Nice", "Montpellier",
+]
+
+VERDICT_LABELS = {
+    "arroser_maintenant": "Arroser maintenant",
+    "verifier_prochainement": "Vérifier prochainement",
+    "ne_pas_arroser": "Ne pas arroser",
+}
+
 tab_c, tab_a, tab_b, tab_d = st.tabs(
     ["💧 Arrosage (C)", "💬 Conseil (A)", "📷 Reconnaissance (B)", "🔬 Santé (D)"])
 
@@ -63,13 +82,70 @@ with tab_c:
     col = st.columns(2)
     nom = col[0].selectbox("Espèce", list(especes), key="c_esp")
     pot = col[0].slider("Taille du pot (cm)", 8, 30, 18)
-    sol = col[1].slider("Humidité du sol (%)", 2, 95, 25)
-    temp = col[1].slider("Température (°C)", 8, 38, 24)
-    lux = col[0].slider("Luminosité (lux)", 50, 2000, 700)
-    hum = col[1].slider("Humidité de l'air (%)", 15, 95, 50)
+    lux = col[1].slider("Luminosité (lux)", 50, 2000, 700)
     jours = col[0].slider("Jours depuis dernier arrosage", 0, 12, 3)
+
+    st.markdown("#### Humidité du sol")
+    source_sol = st.radio(
+        "Source — humidité du sol",
+        ["Saisie manuelle", "Mesure capteur simulée"],
+        horizontal=True, key="c_source_sol", label_visibility="collapsed")
+    sol_manuel = col[1].slider(
+        "Humidité du sol (%)", 2, 95, 25, key="c_sol_slider",
+        disabled=source_sol != "Saisie manuelle")
+    if source_sol != "Saisie manuelle":
+        st.caption("Une mesure sera tirée de `data/mesures_capteurs.csv` "
+                   "(filtrée sur l'espèce si possible) au moment de la prédiction.")
+
+    st.markdown("#### Température et humidité de l'air")
+    source_meteo = st.radio(
+        "Source — température / humidité de l'air",
+        ["Saisie manuelle", "Météo de votre ville"],
+        horizontal=True, key="c_source_meteo", label_visibility="collapsed")
+    col2 = st.columns(2)
+    temp_manuel = col2[0].slider(
+        "Température (°C)", 8, 38, 24, key="c_temp_slider",
+        disabled=source_meteo != "Saisie manuelle")
+    hum_manuel = col2[1].slider(
+        "Humidité de l'air (%)", 15, 95, 50, key="c_hum_slider",
+        disabled=source_meteo != "Saisie manuelle")
+    ville_c = None
+    if source_meteo != "Saisie manuelle":
+        ville_c = st.selectbox("Ville", VILLES, index=0, key="c_ville")
+
     if st.button("Prédire l'arrosage", type="primary"):
         e = especes[nom]
+        notes = []
+
+        if source_sol == "Saisie manuelle":
+            sol = sol_manuel
+        else:
+            capteur = _get_json(f"{API}/api/v1/mesure-capteur",
+                                params={"espece_id": e["id"]})
+            if capteur is None:
+                st.stop()
+            sol = capteur["sol"]
+            notes.append(f"sol : mesure capteur simulée (plante #{capteur['plante_id']}, "
+                        f"{capteur['horodatage']})")
+
+        if source_meteo == "Saisie manuelle":
+            temp, hum = temp_manuel, hum_manuel
+        else:
+            m = _post_json(f"{API}/api/v1/meteo",
+                           json=dict(ville=ville_c, units="metric", lang="fr"))
+            if m is None:
+                st.stop()
+            if m.get("disponible"):
+                temp, hum = m["temperature"], m["humidite_air"]
+                notes.append(f"météo {ville_c} ({m['source']}) : "
+                            f"{m.get('conditions') or 'conditions non précisées'}")
+            else:
+                st.warning("Météo indisponible — valeurs des sliders utilisées en secours.")
+                temp, hum = temp_manuel, hum_manuel
+
+        if notes:
+            st.caption(" · ".join(notes))
+
         r = _post_json(f"{API}/api/v1/arrosage", json=dict(
             taille_pot=pot, espece=dict(id=e["id"], nom_sci=nom,
                 lumiere=e["lumiere"], seuil_sol_sec=e["seuil_sol_sec"]),
@@ -79,12 +155,45 @@ with tab_c:
             st.stop()
         emoji = {"arroser_maintenant": "🚿", "verifier_prochainement": "👀",
                  "ne_pas_arroser": "✋"}.get(r["verdict"], "")
-        st.metric(f"{emoji} Verdict", r["verdict"], f"confiance {r['confiance']:.0%}")
+        libelle = VERDICT_LABELS.get(r["verdict"], r["verdict"])
+        st.metric(f"{emoji} Verdict", libelle, f"confiance {r['confiance']:.0%}")
         st.info(r["explication"])
 
 with tab_a:
     st.subheader("Conseil d'entretien — Gemini + secours local")
-    nom2 = st.selectbox("Espèce", list(especes), key="a_esp")
+
+    st.markdown("#### 1. Reconnaissance de l'espèce")
+    photo_conseil = st.file_uploader(
+        "Photo de la plante", type=["jpg", "jpeg", "png"], key="a_photo")
+
+    if photo_conseil and st.button("Identifier l'espèce", key="a_identifier"):
+        r = _post_json(f"{API}/api/v1/reconnaissance",
+                       files={"fichier": (photo_conseil.name, photo_conseil.getvalue(),
+                                          photo_conseil.type)})
+        if r is not None:
+            st.session_state["a_reco"] = r
+            st.session_state["a_photo_bytes"] = photo_conseil.getvalue()
+
+    reco = st.session_state.get("a_reco")
+    nom2 = None
+    espece_connue = None
+    if reco:
+        nom2 = reco["espece_predite"].replace("_", " ")
+        espece_connue = especes.get(nom2)
+        col_img, col_info = st.columns([1, 2])
+        col_img.image(st.session_state["a_photo_bytes"], width=220)
+        col_info.metric("Espèce reconnue", nom2, f"score {reco['score']:.0%}")
+        for alt in reco.get("alternatives", []):
+            col_info.caption(f"alternative : {alt['espece'].replace('_', ' ')} "
+                             f"({alt['score']:.0%})")
+        if espece_connue is None:
+            col_info.caption("Espèce hors catalogue connu : luminosité et seuil de "
+                             "sol secs par défaut utilisés pour le conseil.")
+    else:
+        st.info("Téléversez une photo puis cliquez sur *Identifier l'espèce* "
+                "pour générer le conseil.")
+
+    st.markdown("#### 2. Conseil d'entretien")
 
     source_metriques = st.radio(
         "Choix de la température et de l'humidité du jour",
@@ -119,27 +228,19 @@ with tab_a:
             "Les sliders sont ignorés."
         )
 
-    villes = [
-        "Paris",
-        "Lyon",
-        "Marseille",
-        "Toulouse",
-        "Lille",
-        "Bordeaux",
-        "Nantes",
-        "Strasbourg",
-        "Nice",
-        "Montpellier",
-    ]
-    ville = st.selectbox("Ville", villes, index=0)
+    ville = st.selectbox("Ville", VILLES, index=0)
 
     meteo_payload = dict(ville=ville, units="metric", lang="fr")
 
-    if st.button("Générer le conseil", type="primary"):
-        e = especes[nom2]
+    if st.button("Générer le conseil", type="primary", disabled=reco is None):
+        if espece_connue is not None:
+            espece_payload = dict(id=espece_connue["id"], nom_sci=nom2,
+                                  lumiere=espece_connue["lumiere"],
+                                  seuil_sol_sec=espece_connue["seuil_sol_sec"])
+        else:
+            espece_payload = dict(id=0, nom_sci=nom2)
         payload = dict(
-            espece=dict(id=e["id"], nom_sci=nom2, lumiere=e["lumiere"],
-                        seuil_sol_sec=e["seuil_sol_sec"]),
+            espece=espece_payload,
             mesure=dict(sol=20, temperature=tj, lux=700, humidite_air=hj),
         )
         if utilisation_sliders:

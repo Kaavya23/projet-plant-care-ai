@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Literal
 
 import pandas as pd
@@ -32,6 +33,10 @@ from plantcare.usecases.services import (
 )
 
 load_dotenv()  # charge .env pour un lancement local (hors Docker)
+
+DATA_DIR = Path("data")
+MESURES_CAPTEURS_PATH = DATA_DIR / "mesures_capteurs.csv"
+PLANTES_PATH = DATA_DIR / "plantes.csv"
 
 app = FastAPI(title="PlantCare AI", version="1.0.0",
               description="POC — trois options d'IA (A/B/C) sur socle datalake.")
@@ -117,8 +122,7 @@ def _to_domain(req: ArrosageRequest):
     return plante, espece, mesure
 
 
-def _charger_meteo(req: ConseilRequest) -> MeteoSnapshot | None:
-    meteo_req = req.meteo or MeteoIn()
+def _charger_meteo(meteo_req: MeteoIn) -> MeteoSnapshot | None:
     ville = (meteo_req.ville or settings.openweather_default_city or "").strip()
     code_pays = meteo_req.code_pays or settings.openweather_default_country
 
@@ -179,6 +183,35 @@ def recommander_arrosage(req: ArrosageRequest):
     return result
 
 
+@app.get("/api/v1/mesure-capteur", tags=["Capteurs"])
+def tirer_mesure_capteur(espece_id: int | None = None):
+    """Pioche une mesure capteur simulée dans data/mesures_capteurs.csv.
+
+    Si espece_id est fourni, filtre sur les plantes de cette espèce
+    (via data/plantes.csv) quand c'est possible ; sinon tire sur tout le jeu.
+    """
+    if not MESURES_CAPTEURS_PATH.exists():
+        raise HTTPException(404, "Aucune mesure capteur simulée disponible.")
+    mesures = pd.read_csv(MESURES_CAPTEURS_PATH)
+
+    if espece_id is not None and PLANTES_PATH.exists():
+        plantes = pd.read_csv(PLANTES_PATH)
+        plante_ids = plantes.loc[plantes["espece_id"] == espece_id, "id"]
+        filtree = mesures[mesures["plante_id"].isin(plante_ids)]
+        if not filtree.empty:
+            mesures = filtree
+
+    ligne = mesures.sample(1).iloc[0]
+    return {
+        "sol": round(float(ligne["sol"]), 1),
+        "temperature": round(float(ligne["temperature"]), 1),
+        "humidite_air": round(float(ligne["humidite"]), 1),
+        "lux": round(float(ligne["lux"]), 1),
+        "plante_id": int(ligne["plante_id"]),
+        "horodatage": str(ligne["horodatage"]),
+    }
+
+
 @app.post("/api/v1/conseil", tags=["Option A"])
 def conseiller_entretien(req: ConseilRequest):
     """Option A - conseil en langage naturel (Gemini + secours local)."""
@@ -206,7 +239,7 @@ def conseiller_entretien(req: ConseilRequest):
     elif latitude_effective is not None and longitude_effective is not None:
         mode_meteo = "coordonnees"
 
-    meteo = _charger_meteo(req)
+    meteo = _charger_meteo(req.meteo or MeteoIn())
 
     # Overrides manuels prioritaires; sinon meteo OWM; sinon capteurs locaux.
     temp_jour = req.temperature_jour
@@ -276,6 +309,28 @@ def conseiller_entretien(req: ConseilRequest):
             if meteo
             else None
         ),
+    }
+
+
+@app.post("/api/v1/meteo", tags=["Meteo"])
+def obtenir_meteo(req: MeteoIn):
+    """Meteo brute (OpenWeatherMap ou repli local) - sans appel LLM.
+
+    Reutilise la meme passerelle que /api/v1/conseil, pour les ecrans qui
+    ont besoin de temperature/humidite du jour sans generer de conseil.
+    """
+    meteo = _charger_meteo(req)
+    if meteo is None:
+        return {"disponible": False}
+    return {
+        "disponible": True,
+        "temperature": round(meteo.temperature, 2),
+        "humidite_air": round(meteo.humidite_air, 2),
+        "conditions": meteo.conditions,
+        "source": meteo.source,
+        "latitude": meteo.latitude,
+        "longitude": meteo.longitude,
+        "units": meteo.units,
     }
 
 

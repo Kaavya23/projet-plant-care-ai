@@ -16,6 +16,17 @@ from plantcare.domain.entities import (MesureCapteur, Plante, Espece,
 
 ARTIFACTS = Path("ml/artifacts")
 
+FEATURE_LABELS = {
+    "espece_id": "espèce",
+    "taille_pot": "taille du pot",
+    "sol": "humidité du sol",
+    "temperature": "température",
+    "lux": "luminosité",
+    "humidite_air": "humidité de l'air",
+    "seuil_sol_sec": "seuil de sol sec",
+    "jours_dernier_arrosage": "jours depuis le dernier arrosage",
+}
+
 
 class WateringModel:
     def __init__(self, artifacts_dir: Path = ARTIFACTS):
@@ -51,7 +62,8 @@ class WateringModel:
         proba = self.model.predict_proba(X)[0]
         idx = int(proba.argmax())
         verdict = str(self.model.classes_[idx])
-        top = [t[0] for t in self.meta.get("importances", [])[:3]]
+        top = [FEATURE_LABELS.get(t[0], t[0])
+                for t in self.meta.get("importances", [])[:3]]
         return RecommandationArrosage(
             verdict=Verdict(verdict), confiance=float(proba[idx]),
             explication="Facteurs déterminants : " + ", ".join(top))
