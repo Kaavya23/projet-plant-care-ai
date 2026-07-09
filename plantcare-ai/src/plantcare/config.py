@@ -4,6 +4,9 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+from dotenv import load_dotenv
+load_dotenv()  # no-op si .env absent ; doit précéder les os.getenv() de Settings
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -19,6 +22,8 @@ class Settings:
     # LLM (Option A)
     gcp_project: str | None = os.getenv("GCP_PROJECT")
     gcp_location: str = os.getenv("GCP_LOCATION", "europe-west1")
+    # plant.health (Option D)
+    plant_health_api_key: str | None = os.getenv("PLANT_HEALTH_API_KEY")
     # MLflow
     mlflow_uri: str = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
 

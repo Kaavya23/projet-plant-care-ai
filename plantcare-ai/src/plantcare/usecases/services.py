@@ -12,9 +12,11 @@ dépendances par injection (adaptateurs), ce qui les rend testables isolément.
 from __future__ import annotations
 
 from plantcare.adapters.llm_gateway import LLMGateway, PayloadConseil
+from plantcare.adapters.plant_health_gateway import PlantHealthGateway
 from plantcare.adapters.vision_model import VisionModel
 from plantcare.adapters.watering_model import WateringModel
-from plantcare.domain.entities import (AnalyseImage, ConseilEntretien, Espece,
+from plantcare.domain.entities import (AnalyseImage, AnalyseSante,
+                                       ConseilEntretien, Espece,
                                        MesureCapteur, Plante,
                                        RecommandationArrosage)
 
@@ -59,3 +61,13 @@ class ReconnaitreEspece:
 
     def executer(self, image_bytes: bytes) -> AnalyseImage:
         return self.model.predire(image_bytes)
+
+
+class AnalyserSantePlante:
+    """Option D — délègue l'analyse de santé au gateway plant.health."""
+
+    def __init__(self, gateway: PlantHealthGateway):
+        self.gateway = gateway
+
+    def executer(self, image_bytes: bytes) -> AnalyseSante:
+        return self.gateway.analyser(image_bytes)

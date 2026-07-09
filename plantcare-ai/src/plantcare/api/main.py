@@ -7,27 +7,34 @@ et sérialiser leur résultat. Aucune logique métier dans cette couche.
 """
 from __future__ import annotations
 
+# Charge le fichier .env avant tout import local qui lit os.getenv()
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from plantcare.adapters.llm_gateway import obtenir_gateway
+from plantcare.adapters.plant_health_gateway import obtenir_plant_health_gateway
 from plantcare.adapters.vision_model import VisionModel
 from plantcare.adapters.watering_model import WateringModel
 from plantcare.domain.entities import Espece, MesureCapteur, Plante
-from plantcare.usecases.services import (ConseillerEntretien,
+from plantcare.usecases.services import (AnalyserSantePlante, ConseillerEntretien,
                                          ReconnaitreEspece, RecommanderArrosage)
 
 app = FastAPI(title="PlantCare AI", version="1.0.0",
-              description="POC — trois options d'IA (A/B/C) sur socle datalake.")
+              description="POC — quatre options d'IA (A/B/C/D) sur socle datalake.")
 
 # --- composition root : adaptateurs concrets -> cas d'usage ----------------
 _watering = WateringModel()
 _vision = VisionModel()
 _gateway = obtenir_gateway()
+_plant_health = obtenir_plant_health_gateway()
 
 uc_arrosage = RecommanderArrosage(_watering)
 uc_conseil = ConseillerEntretien(_gateway, uc_arrosage)
 uc_espece = ReconnaitreEspece(_vision)
+uc_sante = AnalyserSantePlante(_plant_health)
 
 
 # --- schémas d'E/S (Pydantic) ---------------------------------------------
@@ -78,7 +85,8 @@ def _to_domain(req: ArrosageRequest):
 def health():
     return {"status": "ok", "watering_model": _watering.is_loaded,
             "vision_model": _vision.is_loaded,
-            "llm": type(_gateway).__name__}
+            "llm": type(_gateway).__name__,
+            "plant_health": type(_plant_health).__name__}
 
 
 @app.post("/api/v1/arrosage", tags=["Option C"])
@@ -109,3 +117,25 @@ async def reconnaitre_espece(fichier: UploadFile = File(...)):
     return {"espece_predite": res.espece_predite, "score": round(res.score, 3),
             "alternatives": [{"espece": e, "score": round(s, 3)}
                              for e, s in res.alternatives]}
+
+
+@app.post("/api/v1/sante", tags=["Option D"])
+async def analyser_sante(fichier: UploadFile = File(...)):
+    """Option D — analyse de santé via plant.health (Kindwise API)."""
+    if not fichier.content_type or not fichier.content_type.startswith("image/"):
+        raise HTTPException(400, "Un fichier image est attendu.")
+    data = await fichier.read()
+    res = uc_sante.executer(data)
+    return {
+        "est_saine": res.est_saine,
+        "probabilite_sante": round(res.probabilite_sante, 3) if res.probabilite_sante is not None else None,
+        "suggestions": [
+            {
+                "nom": s.nom,
+                "probabilite": round(s.probabilite, 3),
+                "description": s.description,
+                "traitement": s.traitement,
+            }
+            for s in res.suggestions
+        ],
+    }

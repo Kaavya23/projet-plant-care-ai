@@ -12,6 +12,9 @@ import os
 
 import requests
 import streamlit as st
+from dotenv import load_dotenv
+
+load_dotenv()
 
 API = os.getenv("API_URL", "http://localhost:8000")
 
@@ -31,8 +34,8 @@ especes = {
     "Calathea orbifolia": dict(id=6, lumiere=0.4, seuil_sol_sec=40),
 }
 
-tab_c, tab_a, tab_b = st.tabs(
-    ["💧 Arrosage (C)", "💬 Conseil (A)", "📷 Reconnaissance (B)"])
+tab_c, tab_a, tab_b, tab_d = st.tabs(
+    ["💧 Arrosage (C)", "💬 Conseil (A)", "📷 Reconnaissance (B)", "🔬 Santé (D)"])
 
 with tab_c:
     st.subheader("Recommandation d'arrosage — RandomForest maison")
@@ -82,3 +85,66 @@ with tab_b:
         st.metric("Espèce prédite", r["espece_predite"], f"score {r['score']:.0%}")
         for alt in r.get("alternatives", []):
             st.caption(f"alternative : {alt['espece']} ({alt['score']:.0%})")
+
+with tab_d:
+    st.subheader("Analyse de santé — plant.health (Kindwise)")
+    st.caption(
+        "Nécessite `PLANT_HEALTH_API_KEY` côté API. "
+        "La photo est transmise à l'API Kindwise — voir RGPD."
+    )
+    photo_sante = st.file_uploader(
+        "Photo montrant les symptômes",
+        type=["jpg", "jpeg", "png", "webp"],
+        key="d_photo",
+    )
+    if photo_sante is not None:
+        st.image(photo_sante, caption="Image sélectionnée", width=400)
+        if st.button("Analyser la santé", type="primary", key="d_btn"):
+            try:
+                with st.spinner("Analyse en cours..."):
+                    r = requests.post(
+                        f"{API}/api/v1/sante",
+                        files={"fichier": (
+                            photo_sante.name,
+                            photo_sante.getvalue(),
+                            photo_sante.type,
+                        )},
+                        timeout=40,
+                    )
+                    r.raise_for_status()
+                    data = r.json()
+
+                est_saine = data.get("est_saine")
+                prob = data.get("probabilite_sante")
+
+                st.subheader("État général")
+                if est_saine is True:
+                    st.success("La plante semble saine.")
+                elif est_saine is False:
+                    st.warning("La plante présente peut-être un problème.")
+                else:
+                    st.info(
+                        "Résultat indisponible — "
+                        "configurez `PLANT_HEALTH_API_KEY` dans l'environnement de l'API."
+                    )
+
+                if prob is not None:
+                    st.write(f"Score de l'évaluation : {prob:.1%}")
+
+                suggestions = data.get("suggestions", [])
+                if suggestions:
+                    st.subheader("Causes possibles")
+                    for s in suggestions:
+                        p = s.get("probabilite", 0)
+                        with st.expander(f"{s['nom']} — {p:.1%}"):
+                            if s.get("description"):
+                                st.write(s["description"])
+                            if s.get("traitement"):
+                                st.markdown("**Conseils proposés :**")
+                                st.write(s["traitement"])
+
+            except requests.HTTPError as err:
+                st.error(f"Erreur API HTTP {err.response.status_code}.")
+                st.code(err.response.text)
+            except requests.RequestException as err:
+                st.error(f"Impossible de contacter l'API : {err}")
