@@ -39,6 +39,10 @@ tab_c, tab_a, tab_b, tab_d = st.tabs(
 
 with tab_c:
     st.subheader("Recommandation d'arrosage — RandomForest maison")
+    st.info(
+        "Priorité des données: 1) valeurs manuelles si renseignées, "
+        "2) météo OpenWeatherMap, 3) capteurs locaux en repli."
+    )
     col = st.columns(2)
     nom = col[0].selectbox("Espèce", list(especes), key="c_esp")
     pot = col[0].slider("Taille du pot (cm)", 8, 30, 18)
@@ -62,17 +66,84 @@ with tab_c:
 with tab_a:
     st.subheader("Conseil d'entretien — Gemini + secours local")
     nom2 = st.selectbox("Espèce", list(especes), key="a_esp")
-    tj = st.slider("Température du jour (°C)", 8, 38, 32)
-    hj = st.slider("Humidité de l'air du jour (%)", 15, 95, 40)
+
+    source_metriques = st.radio(
+        "Choix de la temperature et de l'humidite du jour",
+        [
+            "Saisie manuelle (sliders)",
+            "Meteo OpenWeatherMap",
+        ],
+        horizontal=True,
+    )
+
+    utilisation_sliders = source_metriques == "Saisie manuelle (sliders)"
+    tj = st.slider(
+        "Température du jour (ajustable, °C)",
+        8,
+        38,
+        32,
+        disabled=not utilisation_sliders,
+    )
+    hj = st.slider(
+        "Humidité de l'air du jour (ajustable, %)",
+        15,
+        95,
+        40,
+        disabled=not utilisation_sliders,
+    )
+
+    if utilisation_sliders:
+        st.caption("Les sliders seront utilises pour temperature/humidite du conseil.")
+    else:
+        st.caption(
+            "La meteo API sera prioritaire pour temperature/humidite. "
+            "Les sliders sont ignores."
+        )
+
+    villes = [
+        "Paris",
+        "Lyon",
+        "Marseille",
+        "Toulouse",
+        "Lille",
+        "Bordeaux",
+        "Nantes",
+        "Strasbourg",
+        "Nice",
+        "Montpellier",
+    ]
+    ville = st.selectbox("Ville", villes, index=0)
+
+    meteo_payload = dict(ville=ville, units="metric", lang="fr")
+
     if st.button("Générer le conseil", type="primary"):
         e = especes[nom2]
-        r = requests.post(f"{API}/api/v1/conseil", json=dict(
+        payload = dict(
             espece=dict(id=e["id"], nom_sci=nom2, lumiere=e["lumiere"],
                         seuil_sol_sec=e["seuil_sol_sec"]),
             mesure=dict(sol=20, temperature=tj, lux=700, humidite_air=hj),
-            temperature_jour=tj, humidite_air_jour=hj)).json()
+        )
+        if utilisation_sliders:
+            payload["temperature_jour"] = tj
+            payload["humidite_air_jour"] = hj
+        payload["meteo"] = meteo_payload
+
+        r = requests.post(f"{API}/api/v1/conseil", json=payload).json()
+        st.markdown("## Resultat du conseil")
         st.success(r["conseil"])
-        st.caption(f"source : {r['source']}")
+        st.caption(f"Source LLM: {r['source']}")
+
+        contexte = r.get("contexte_utilise", {})
+
+        st.caption("Contexte utilise")
+        ville_ret = ville
+        if r.get("meteo") and r["meteo"].get("ville"):
+            ville_ret = r["meteo"].get("ville")
+        st.caption(
+            f"Temperature retenue: {r['temperature_jour']:.1f} deg · "
+            f"Humidite retenue: {r['humidite_air_jour']:.1f}% · "
+            f"Ville retenue: {ville_ret}"
+        )
 
 with tab_b:
     st.subheader("Reconnaissance d'espèce — MobileNetV2 fine-tuné")

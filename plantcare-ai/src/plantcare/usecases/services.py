@@ -43,7 +43,9 @@ class ConseillerEntretien:
         self.arrosage = arrosage
 
     def executer(self, plante: Plante, espece: Espece, mesure: MesureCapteur,
-                 temp_jour: float, humidite_jour: float) -> ConseilEntretien:
+                 temp_jour: float, humidite_jour: float,
+                 meteo_resume: str | None = None,
+                 meteo_source: str | None = None) -> ConseilEntretien:
         reco = self.arrosage.executer(plante, espece, mesure)
         # payload PSEUDONYMISÉ : aucune donnée personnelle brute (cf. M6)
         payload = PayloadConseil(
@@ -51,7 +53,9 @@ class ConseillerEntretien:
             lumiere=_label_lumiere(espece.lumiere),
             temperature_jour=temp_jour,
             humidite_air_jour=humidite_jour,
-            verdict_arrosage=reco.verdict.value)
+            verdict_arrosage=reco.verdict.value,
+            meteo_resume=meteo_resume,
+            meteo_source=meteo_source)
         return self.gateway.conseiller(payload)
 
 

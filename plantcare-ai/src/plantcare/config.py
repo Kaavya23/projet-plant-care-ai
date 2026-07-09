@@ -22,6 +22,22 @@ class Settings:
     # LLM (Option A)
     gcp_project: str | None = os.getenv("GCP_PROJECT")
     gcp_location: str = os.getenv("GCP_LOCATION", "europe-west1")
+    # Meteo (OpenWeatherMap, Option A)
+    openweather_api_key: str | None = os.getenv("OPENWEATHER_API_KEY")
+    openweather_default_lat: float | None = (
+        float(os.getenv("OPENWEATHER_DEFAULT_LAT"))
+        if os.getenv("OPENWEATHER_DEFAULT_LAT")
+        else None
+    )
+    openweather_default_lon: float | None = (
+        float(os.getenv("OPENWEATHER_DEFAULT_LON"))
+        if os.getenv("OPENWEATHER_DEFAULT_LON")
+        else None
+    )
+    openweather_default_city: str | None = os.getenv("OPENWEATHER_DEFAULT_CITY")
+    openweather_default_country: str | None = os.getenv("OPENWEATHER_DEFAULT_COUNTRY")
+    openweather_default_units: str = os.getenv("OPENWEATHER_DEFAULT_UNITS", "metric")
+    openweather_default_lang: str = os.getenv("OPENWEATHER_DEFAULT_LANG", "fr")
     # plant.health (Option D)
     plant_health_api_key: str | None = os.getenv("PLANT_HEALTH_API_KEY")
     # MLflow

@@ -10,11 +10,11 @@ projet _MSI-5-26-BD_ (Tina, Kaavya, Nathan, Thomas · client Zineb Lamri).
 
 ## Les trois options
 
-| Option              | Fonction                               | Brique                               | Donnée / RGPD                    |
-| ------------------- | -------------------------------------- | ------------------------------------ | -------------------------------- |
-| **A — Conseiller**  | conseil d'entretien en langage naturel | Vertex AI Gemini + **secours local** | payload pseudonymisé             |
-| **B — Reconnaître** | espèce à partir d'une photo            | **MobileNetV2 fine-tuné**            | photo sensible → 100 % local     |
-| **C — Anticiper**   | verdict d'arrosage                     | **RandomForest maison** + SHAP       | habitudes → jamais externalisées |
+| Option              | Fonction                               | Brique                                                | Donnée / RGPD                    |
+| ------------------- | -------------------------------------- | ----------------------------------------------------- | -------------------------------- |
+| **A — Conseiller**  | conseil d'entretien en langage naturel | Vertex AI Gemini + OpenWeatherMap + **secours local** | payload pseudonymisé             |
+| **B — Reconnaître** | espèce à partir d'une photo            | **MobileNetV2 fine-tuné**                             | photo sensible → 100 % local     |
+| **C — Anticiper**   | verdict d'arrosage                     | **RandomForest maison** + SHAP                        | habitudes → jamais externalisées |
 
 ## Démarrage rapide (local, sans Docker)
 
@@ -40,6 +40,25 @@ PLANT_HEALTH_API_KEY=votre_cle_ici
 ```
 
 Sans clé, un repli stub renvoie un résultat vide (aucune erreur). La clé est lue par `load_dotenv()` au démarrage de l'API et du dashboard.
+
+## Option A — Contexte météo OpenWeatherMap (facultatif)
+
+Vous pouvez enrichir le prompt LLM avec les conditions météo locales (température,
+humidité, vent, pluie), soit via des coordonnées envoyées dans la requête
+`POST /api/v1/conseil`, soit via des coordonnées par défaut dans `.env`.
+
+Ajoutez dans `.env` :
+
+```
+OPENWEATHER_API_KEY=votre_cle_ici
+OPENWEATHER_DEFAULT_LAT=48.8566
+OPENWEATHER_DEFAULT_LON=2.3522
+OPENWEATHER_DEFAULT_UNITS=metric
+OPENWEATHER_DEFAULT_LANG=fr
+```
+
+Les champs `temperature_jour` et `humidite_air_jour` restent ajustables
+manuellement : si fournis, ils sont prioritaires sur la météo externe.
 
 ## Démarrage complet (Docker, une commande)
 
