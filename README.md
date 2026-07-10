@@ -53,6 +53,11 @@ Remarques pratiques :
 - Pour récupérer un sous-ensemble PlantNet depuis Hugging Face, utilisez
   `ml/download_plantnet_from_hf_api.py` (script Docker-friendly fourni).
 - L'authentification HF utilise `HF_TOKEN` / `HUGGINGFACE_HUB_TOKEN`.
+- Les artefacts entraînés (`artifacts/vision_mobilenet.pt`, `artifacts/watering_rf.joblib`,
+  etc.) sont commités dans le dépôt : l'API et le dashboard fonctionnent tels quels après
+  un `git clone`, sans réentraînement préalable. `make train-c` / `make train-b`
+  ne sont nécessaires que si vous voulez régénérer ces artefacts (nouvelles données,
+  nouveaux hyperparamètres).
 
 ## Commandes utiles
 
