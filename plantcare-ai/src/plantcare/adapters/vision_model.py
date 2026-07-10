@@ -16,7 +16,7 @@ from pathlib import Path
 
 from plantcare.domain.entities import AnalyseImage
 
-ARTIFACTS = Path("ml/artifacts")
+ARTIFACTS = Path("artifacts")
 
 
 class VisionModel:

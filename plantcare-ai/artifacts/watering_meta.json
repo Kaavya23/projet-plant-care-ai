@@ -1,0 +1,38 @@
+{
+  "features": [
+    "espece_id",
+    "taille_pot",
+    "sol",
+    "temperature",
+    "lux",
+    "humidite_air",
+    "seuil_sol_sec",
+    "jours_dernier_arrosage"
+  ],
+  "classes": [
+    "arroser_maintenant",
+    "ne_pas_arroser",
+    "verifier_prochainement"
+  ],
+  "metrics": {
+    "accuracy": 0.8768558951965065,
+    "precision_macro": 0.867785332517378,
+    "recall_macro": 0.866643982955246,
+    "f1_macro": 0.8672010449756952,
+    "f1_baseline": 0.203900171769223
+  },
+  "importances": [
+    [
+      "taille_pot",
+      0.06847975782115662
+    ],
+    [
+      "espece_id",
+      0.061054495537166485
+    ],
+    [
+      "sol",
+      0.035096008731395616
+    ]
+  ]
+}

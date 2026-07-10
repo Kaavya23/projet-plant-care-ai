@@ -39,7 +39,7 @@ services:
       DATALAKE_ROOT: s3://plantcare
       MINIO_ENDPOINT: http://minio:9000
     ports: ["8000:8000"]
-    volumes: ["./ml/artifacts:/app/ml/artifacts"]
+    volumes: ["./artifacts:/app/artifacts"]
 
   dashboard:
     build: .

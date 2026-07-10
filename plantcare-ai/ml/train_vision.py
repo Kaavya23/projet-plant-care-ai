@@ -27,7 +27,7 @@ import argparse
 import json
 from pathlib import Path
 
-ARTIFACTS = Path("ml/artifacts")
+ARTIFACTS = Path("artifacts")
 DATA_DIR = Path("data/plantnet_subset")
 
 
@@ -116,15 +116,15 @@ def main(epochs: int = 3, lr: float = 1e-3):
             loss = crit(net(x), y)
             loss.backward()
             opt.step()
-        print(f"  epoch {ep+1}/{epochs}  val_acc={accuracy(net):.3f}")
-
         finetune_metrics = evaluate_metrics(net)
         acc_ft = finetune_metrics["accuracy"]
         f1_ft = finetune_metrics["f1_macro"]
-        print(f"\n=== Vision (Option B) ===\n  baseline (pré-entraîné brut) : {acc_baseline:.3f} (F1={f1_baseline:.3f})"
-            f"\n  après fine-tuning            : {acc_ft:.3f} (F1={f1_ft:.3f})"
-            f"\n  amélioration                 : {'OUI' if acc_ft > acc_baseline else 'NON'} "
-            f"({acc_ft - acc_baseline:+.3f})")
+        print(f"  epoch {ep+1}/{epochs}  val_acc={acc_ft:.3f}")
+
+    print(f"\n=== Vision (Option B) ===\n  baseline (pré-entraîné brut) : {acc_baseline:.3f} (F1={f1_baseline:.3f})"
+        f"\n  après fine-tuning            : {acc_ft:.3f} (F1={f1_ft:.3f})"
+        f"\n  amélioration                 : {'OUI' if acc_ft > acc_baseline else 'NON'} "
+        f"({acc_ft - acc_baseline:+.3f})")
 
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     torch.save(net.state_dict(), ARTIFACTS / "vision_mobilenet.pt")

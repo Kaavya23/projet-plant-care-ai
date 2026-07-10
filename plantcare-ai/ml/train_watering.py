@@ -6,7 +6,7 @@ Option C — Modèle maison de recommandation d'arrosage (RandomForest).
 - Évalue accuracy / precision / recall / F1 macro (imposé F1 > 0.70 dans M1).
 - Calcule l'importance des variables via SHAP (interprétabilité, cf. M6).
 - Journalise le run dans MLflow si disponible, sinon dégrade proprement.
-- Sérialise le modèle + la liste des features dans ml/artifacts/.
+- Sérialise le modèle + la liste des features dans artifacts/.
 
 Usage :  python ml/train_watering.py
 """
@@ -31,7 +31,7 @@ except Exception:  # pragma: no cover
 FEATURES = ["espece_id", "taille_pot", "sol", "temperature", "lux",
             "humidite_air", "seuil_sol_sec", "jours_dernier_arrosage"]
 TARGET = "verdict"
-ARTIFACTS = Path("ml/artifacts")
+ARTIFACTS = Path("artifacts")
 DATA = Path("data/dataset_arrosage.csv")
 
 

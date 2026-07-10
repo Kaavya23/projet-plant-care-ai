@@ -14,7 +14,7 @@ from pathlib import Path
 from plantcare.domain.entities import (MesureCapteur, Plante, Espece,
                                        RecommandationArrosage, Verdict)
 
-ARTIFACTS = Path("ml/artifacts")
+ARTIFACTS = Path("artifacts")
 
 FEATURE_LABELS = {
     "espece_id": "espèce",

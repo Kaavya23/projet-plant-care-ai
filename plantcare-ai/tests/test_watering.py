@@ -5,7 +5,7 @@ from pathlib import Path
 
 def test_f1_au_dessus_du_seuil(tmp_path):
     # les artefacts sont produits par l'étape CI précédente
-    meta = Path("ml/artifacts/watering_meta.json")
+    meta = Path("artifacts/watering_meta.json")
     if not meta.exists():
         subprocess.run([sys.executable, "ml/generate_synthetic_data.py"], check=True)
         subprocess.run([sys.executable, "ml/train_watering.py"], check=True)
